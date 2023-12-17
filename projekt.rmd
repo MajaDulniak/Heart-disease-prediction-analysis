@@ -1,0 +1,539 @@
+---
+title: "Projekt"
+author: "Maja Dulniak, Patrycja Leszczyńska"
+date: "2022-11-27"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo =FALSE,warning=FALSE,message=FALSE)
+
+```
+
+# ***Przewidywanie chorób serca***
+
+Choroby serca to zaburzenia powstałe na skutek zmiany struktury anatomicznej serca lub jego czynności, które mogą wynikać z wielu przyczyn, zarówno pierwotnych, jak i nabytych.
+
+Jak dowiadujemy się ze strony WHO, choroby serca są główną przyczyną zgonów na świecie od niemal 20 lat.
+
+#### Szacunkowa liczba zgonów z powodu chorób serca i układu krążenia (2019)
+
+![](images/323544423_843497873386260_8609826288843380345_n-01.png)
+
+![<https://www.bhf.org.uk/-/media/files/research/heart-statistics/bhf-cvd-statistics-global-factsheet.pdf>](mapa.png){wight="400"}
+
+### [Cel badania]{.underline}
+
+Analiza statystyczna poniższych danych jest próbą znalezienia czynników powiązanych z rozwojem chorób serca.
+
+## 1. Prezentacja danych
+
+```{r, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(rstatix)
+library(kableExtra)
+library(PerformanceAnalytics)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(caret)
+library(ggfortify)
+library(rio)
+library(rvest)
+library(stats)
+
+dane<-read.csv("C:/Users/Dell/Desktop/3 rok/projekt analiza/dane.csv")
+
+colnames(dane)<-c("Płeć","Wiek","Choroba_serca","BMI","Palenie","Alkohol","Udar","Zdrowie_fizyczne","Zdrowie_psychiczne","Chodzenie","Cukrzyca","Aktywność_fizyczna","Czas_snu","Astma","Choroba_nerek","Skóra")
+
+```
+
+```{r}
+df_footnote <- dane
+names(df_footnote)[8] <- paste0(names(df_footnote)[8], 
+                                footnote_marker_number(1))
+
+names(df_footnote)[9] <- paste0(names(df_footnote)[9], 
+                                footnote_marker_number(2))
+
+head(df_footnote, 10) %>% 
+  kable (dfbooktabs = T,escape = F, align = "c") %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>% 
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = T,fixed_thead = T) %>%
+  row_spec(0, bold = T, color = "blue4",font_size = 14) %>%
+   footnote(general = "W powyższej tabeli zostało przedstawione tylko 10 pierwszych wierszy")
+```
+
+## 2. Opis zbioru danych
+
+Zbiór danych obejmuje temat choroby serca, która jest jedną z głównych przyczyn śmierci większości ludzi w Stanach Zjednoczonych. Dane są z 2020r. i zawierają odpowiedzi 100 osób (powyżej 35 roku życia) na pytania związane z chorobą serca. Około połowa wszystkich Amerykanów ma co najmniej jeden z kluczowych czynników ryzyka chorób serca:
+
+-   wysokie ciśnienie krwi
+
+-   wysoki poziom cholesterolu
+
+-   palenie
+
+-   cukrzyca
+
+-   otyłość (wysokie BMI)
+
+-   brak wystarczającej aktywności fizycznej
+
+-   picie zbyt dużej ilości alkoholu
+
+### [Wyjaśnienie czynników]{.underline}
+
+*Płeć*
+
+*Wiek* (od 35 lat do 90)
+
+*Choroba* - ankietowani, którzy kiedykolwiek zgłosili chorobę serca lub zawał mięśnia sercowego (odp. 1=Tak, 0=Nie)
+
+*BMI* - wskaźnik masy ciała
+
+*Palenie* - czy wypaliłaś/wypaliłeś przynajmniej 100 papierosów w całym swoim życiu? (5 paczek=100 ) (1=Tak,0=Nie)
+
+*Alkohol* - osoby intensywnie pijące (dorośli mężczyźni wypijający więcej niż 14 drinków tygodniowo i dorosłe kobiety wypijające więcej niż 7 drinków tygodniowo) (1=Tak,0=Nie)
+
+*Udar* - czy kiedyś miałaś/miałeś udar? (1=Tak,0=Nie)
+
+*Zdrowie fizyczne* -- w ciągu ostatniego miesiąca, przez ile dni [nie]{.underline} czułaś/czułeś się dobrze fizycznie? (odp.ilość dni)
+
+*Zdrowie psychiczne* - w ciągu ostatniego miesiąca,przez ile dni [nie]{.underline} czułaś/czułeś się dobrze psychicznie? (odp. ilość dni)
+
+*Chodzenie* - czy masz poważne trudności z chodzeniem lub wchodzeniem po schodach? (1=Tak,0=Nie)
+
+*Cukrzyca* - czy masz cukrzycę? (1=Tak,0=Nie)
+
+*Aktywność fizyczna* - dorośli, którzy zgłosili aktywnośś fizyczną / ćwiczenia w ciągu ostatnich 30 dni, inne niż ich zwykła praca (Tak=1,Nie=0)
+
+*Czas snu* - ile średnio śpisz w ciągu doby? (ilość godzin snu)
+
+*Astma* - czy masz astmę? (Tak=1,Nie=0)
+
+*Choroba nerek* - czy kiedykolwiek powiedziano ci ,że masz chorobę nerek? (Tak=1,Nie=0)
+
+*Skóra* - czy miałeś problemy ze skórą? (Tak=1,Nie=0)
+
+## 3. Podstawowe statystyki opisowe
+
+```{r}
+dane2<-dane[,-1]
+#bez zmiennych factor
+
+df<-dane2
+st_op<-apply(df,2,summary)
+st_op<-rbind(st_op,St.dev=apply(df,2,sd))
+rownames(st_op) <- c('minimum','kwantyl dolny','mediana','średnia','kwantyl górny','maksimum','odchylenie standardowe')
+
+kbl(st_op) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+## 4. Zależności pomiędzy zmiennymi
+
+Sprawdzimy czy są jakieś zależności pomiędzy zmiennymi
+
+```{r, fig.height=50, fig.width=50}
+chart.Correlation(dane2) #NIE WIEM CZEMU ALE NAZWY SĄ MALUTKIE ALE I TAK JEST LEPIEJ
+```
+
+Otrzymana macierz korelacji pokazuje ,że zmienna `Choroba serca` jest skorelowana ze zmiennymi `Palenie`, `Udar`, `Chodzenie`, `Cukrzyca` oraz `Skóra`, która ma największą wartość korelacji równą 0.43. Ponadto istnieje zauważalna korelacja między zmiennymi `BMI` i `Chodzenie`, oraz między `Zdrowie fizyczne` i `Chodzenie`.
+
+### Wykresy
+
+Przedstawimy wykresy zależności między zmiennymi.
+
+-   **Wykres zależności między zmienną** `BMI` **a** `Palenie`.
+
+```{r}
+library("gridExtra")
+w1<-ggplot(data=dane,aes(y=BMI, x=Palenie))+
+  geom_point()
+w1
+
+```
+
+Zauważamy ,że osoby palące mieszczą się w przedziale od poniżej 20 do maksymalnie 35 BMI, natomiast osoby niepalące mniej więcej na całym przedziale.
+
+-   **Wykres zależności między zmiennymi** `Wiek` **i** `Alkohol`.
+
+```{r}
+w2<-ggplot(data=dane,aes(y=Wiek, x=Alkohol))+
+  geom_point()
+w2
+```
+
+Bardzo mało osób przyznało ,że w ciągu tygodnia piją alkohol (czyli dla mężczyzn jest to co najmniej 14 drinków, a dla kobiet 7), są to osoby w różnym wieku, ok. 70 roku życia oraz ok. 80 roku życia oraz w wieku 45 lat.
+
+-   **Wykres zależności między zmiennymi** `BMI` **oraz** `Aktywność fizyczna`.
+
+```{r}
+w3<-ggplot(data=dane,aes(y=BMI, x=Aktywność_fizyczna))+
+  xlab("Aktywność fizyczna")+
+  geom_point()
+w3
+```
+
+Zauważamy zależność między wskaźnikiem masy ciała,a aktywnością fizyczną. Wykazuje się wyższe BMI u osób, które odpowiedziały ,że w ciągu ostatnich 30 dni nie uprawiali aktywności fizycznej. BMI u osób uprawiających aktywność fizyczną nie przekracza 35 BMI.
+
+-   **Wykres zależności między zmiennymi** `Czas snu` **oraz** `Zdrowie psychiczne`.
+
+```{r}
+w4<-ggplot(data=dane,aes(y=Czas_snu, x=Zdrowie_psychiczne))+
+  xlab("Zdrowie psychiczne")+
+  ylab("Czas snu")+
+  geom_point()
+w4
+```
+
+Z wykresu można stwierdzić, że większość osób czuje się dobrze psychicznie. Niezależnie od tego czy śpią mniej niż 6h czy 2 razy więcej. Osoby te stwierdziły, że w ciągu ostatnich 30 dni ani razu nie poczuli się niezadowoleni ze swojego zdrowia psychicznego. Natomiast są też osoby, które czuły się źle psychicznie przez cały ostatni miesiąc, ale nie da się zauważyć, że czas snu jest głównym tego powodem. Dane osoby oznaczyły ilość godzin snu na przedziale od 5 do 10.
+
+-   **Jaką część stanowią chorzy w badaniu?**
+
+```{r}
+
+ggplot(dane, aes(x=Choroba_serca, fill=Choroba_serca )) + 
+  xlab("Choroba serca")+
+  ylab("Liczba zachorowań")+
+      geom_bar(width=0.5 , fill="pink") 
+      
+```
+
+Można oszacować z wykresu, że w badaniu wzięło udział ok. 20 osób, którzy mają zdiagnozowaną chorobę serca.
+
+-   **Kto częściej choruje?**
+
+```{r}
+dane %>%
+  group_by(Płeć) %>%
+  summarise(liczba = n()) 
+dane %>%
+  filter(Choroba_serca == 1) %>%
+group_by(Płeć) %>%
+  summarise(liczba_chorych = n()) 
+wspolczynnik_kobiet = 9/64
+wspolczynnik_mezczyzn = 10/36
+data = data.frame(Płeć = c("Kobiety", "Mężczyźni"), Współczynnik_zachorowań = c(wspolczynnik_kobiet, wspolczynnik_mezczyzn))
+
+ggplot(data = data, aes(Płeć, Współczynnik_zachorowań))+
+  ylab("Współczynnik zachorowań")+
+  geom_bar(stat="identity", fill = rainbow(2), width=0.5)
+```
+
+Chociaż w badaniu wzięło udział więcej kobiet niż mężczyzn to z wykresu możemy zauważyć, że mężczyźni częściej chorują na choroby serca.
+
+-   **W jakim stopniu udar wpływa na rozwój choroby serca?**
+
+```{r}
+ ggplot( dane,aes(x=Choroba_serca, y=Udar)) +
+  xlab("Choroba serca")+
+    geom_bar(stat="identity",fill="pink", width = 0.5) 
+```
+
+Jak się okazuje, udar w średnim stopniu wpływa na rozwój choroby serca, ponieważ ze wszystkich 19 osób chorych tylko 4 przyznały ,że miały udar. Natomiast widzimy ,że 3 osoby ,które również go miały nie posiadają choroby serca.
+
+-   **Czy każdy chory wypalił 100 papierosów?**
+
+```{r}
+ggplot( dane,aes(x=Choroba_serca, y=Palenie, fill=Płeć)) +
+  xlab("Choroba serca")+
+     geom_col(width = 0.5) 
+      
+```
+
+Z wykresu okazuje się ,że nie wszyscy posiadający chorobę serca wypalili 100 papierosów (czyli 5 paczek) w ciągu swojego życia, ale na pewno jest to większość z tych osób. Pozostali chorzy mogli wypalić mniejszą ilość papierosów lub wcale.
+
+-   **Czy cukrzyca ma wpływ na rozwój choroby serca?**
+
+```{r}
+ggplot( dane,aes(x=Choroba_serca, y=Cukrzyca)) +
+  xlab("Choroba serca")+
+    geom_bar(stat="identity",fill="pink", width = 0.5) 
+```
+
+Widzimy ,że ok.10 osób posiadających chorobę serca posiada również cukrzycę. Wnioskujemy, że cukrzyca znacznie wpływa na rozwój choroby serca.
+
+-   **Sprawdzimy czy problemy ze skórą dotyczą osób chorych.**
+
+```{r}
+ggplot( dane,aes(x=Choroba_serca, y=Skóra)) +
+  xlab("Choroba serca")+
+    geom_bar(stat="identity",fill="pink", width = 0.5) 
+```
+
+Również możemy wywnioskować, że większość osób chorych na serce miały lub dalej mają problemy związane ze skórą.
+
+# Budowanie modeli
+
+## I. Model pełny
+
+Zbudujemy model pełny (ze wszystkimi zmiennymi) przyjmując ,że zmienną objaśnianą będzie zmienna `Choroba serca`.
+
+```{r}
+model1<-lm(Choroba_serca~ BMI+Palenie+Udar+Zdrowie_fizyczne+Zdrowie_psychiczne+Chodzenie+Cukrzyca+Aktywność_fizyczna+Czas_snu+Astma+Choroba_nerek+Skóra,data=dane)
+summary(model1)
+
+```
+
+[Interpretacja modelu pełnego]{.underline}
+
+W kolumnie *t-value* podana jest wartość statystyki t z testu, w którym testujemy parametry naszego modelu. Statystyka t ma warunkowy rozkład t-studenta.
+
+W kolumnie *Pr(\>\|t\|)* podana jest p-wartość obliczana przy użyciu statystyki t.
+
+p-wartość w połączeniu z wartością statystyki t, pomaga nam zrozumieć, jak istotne są parametry modelu.
+
+W naszym modelu widzimy, że p-wartości dla parametrów: `Palenie`,`Udar`,`Czas snu` oraz `Skóra` są mniejsze od ustalonego poziomu istotności czyli 0.05, a więc są statystycznie istotne. Parametry w otrzymanym modelu nie są zerowe.
+
+*Residual standard error* czyli miara jakości dopasowania regresji liniowej. W naszym modelu zmienna objaśniana `Choroba serca` odchyla się o średnią wartość 0.32. Błąd modelu został obliczony z 87 stopniami swobody.
+
+*Multiple R-squared* to współczynnik determinacji R-kwadrat, który jest używany do oceny dopasowania modelu. Wielkość ta, wyraża procent zmienności zmiennej objaśnianej wyjaśniony przez regresję, czyli liniową zależność od zmiennych objaśniających. U nas R-kwadrat wynosi 0.41, jest to niezadowalające dopasowanie.
+
+*Adjusted R-squared* to skorygowany współczynnik determinacji, w naszym modelu wynosi 0.33.
+
+*F-statistic* ocen jakości modelu,wartość statystyki F pokazuje czy istnieje związek między zmiennymi objaśniającymi a zmienną objaśnianą. Im bardziej różni się od 1 tym lepiej, tutaj wynosi 5.09.
+
+```{r}
+summary(dane$Choroba_serca-model1$fitted.values)
+```
+
+Rozkład reszt w modelu nie jest symetryczny, ponieważ mediana jest różna od średniej. A ponieważ mediana jest mniejsza od średniej, to rozkład reszt jest prawostronnie asymetryczny. W modelu można wyznaczyć wartości, które znacznie odbiegają od wartości zaobserwowanych.
+
+[Podstawowe wykresy diagnostyczne]{.underline}
+
+```{r}
+plot(model1)
+```
+
+I. Wykres reszt względem wartości dopasowanych.
+
+My zakładamy ,że nasz model wykazuje zależność liniową między zmienną objaśnianą a zmiennymi objaśniającymi, aczkolwiek z wykresu trudno to stwierdzić (możemy się mylić).
+
+II\. Z wykresu kwantylowego wynika ,że w modelu obserwacje nr 78, 46 i 54 znacznie odbiegają od prostej. Możemy przypuszczać, że rozkład reszt jest normalny.
+
+III\. Wykres reszt standaryzowanych względem wartości dopasowanych
+
+Na wykresie widać, że czerwona krzywa nie jest linią poziomą i że pierwiastki ze standaryzowanych reszt nie są równomiernie rozmieszczone wokół czerwonej linii. Założenie o jednorodności wariancji reszt nie jest spełnione.
+
+IV\. Wykres reszt względem dźwigni
+
+Interesują nas przypadki, które wpadają poza czerwone kreskowane linie. Im większa wartość, tym bardziej dana obserwacja wpływa na wartości współczynnika regresji.
+
+## II. Model zagnieżdżony
+
+Można zauważyć, że nie wszystkie zmienne są istotne statystycznie. Przejdziemy do modelu stworzonego tylko ze zmiennych istotnie statystycznych.
+
+```{r}
+model2<-lm(Choroba_serca~ Palenie+Udar+Czas_snu+Skóra, data=dane)
+summary(model2) 
+```
+
+Zestawimy wyniki, aby porównać modele
+
+```{r}
+wyn_m1 <- data.frame(round(summary(model1)$coefficients,4))
+r <- c('R-squared',round(as.numeric(summary(model1)$r.squared),4),
+'Adjusted r-squared',round(as.numeric(summary(model1)$adj.r.squared),4))
+11
+f <- c('F statistics',round(as.numeric(summary(model1)$fstatistic[1]),4),'p-value',
+round(pf(summary(model1)$fstatistic[1],summary(model1)$fstatistic[2],
+summary(model1)$fstatistic[3],lower.tail=F),4))
+wyn_m1 <- rbind(wyn_m1,r,f)
+wyn_m1
+```
+
+```{r}
+wyn_m2 <- data.frame(round(summary(model2)$coefficients,4))
+r <- c('R-squared',round(as.numeric(summary(model2)$r.squared),4),
+'Adjusted r-squared',round(as.numeric(summary(model2)$adj.r.squared),4))
+f <- c('F statistics',round(as.numeric(summary(model2)$fstatistic[1]),4),'p-value',
+round(pf(summary(model2)$fstatistic[1],summary(model2)$fstatistic[2],
+summary(model2)$fstatistic[3],lower.tail=F),4))
+wyn_m2 <- rbind(wyn_m2,r,f)
+wyn_m2
+```
+
+W modelu II wartość skorygowana R\^2 wynosi 0,3381 i jest większa niż w modelu I wskazując na to ,że model II jest trochę lepiej dopasowany do danych. Wartość F-statystyki również jest większa.
+
+**Miary dopasowania**
+
+Wyznaczymy błędy **RMSE** (Pierwiastek błędu średnio-kwadratowego) , **MAE** (Średni błąd bezwzględny) oraz **PRESS** (Suma kwadratów predykcji).
+
+```{r}
+library(kableExtra)
+RMSE <- function(obs, pred) sqrt(mean((obs-pred)^2))
+MAE <- function(obs, pred) mean(abs(obs-pred))
+PRESS <- function(model) {
+i <- residuals(model)/(1 - lm.influence(model)$hat)
+round(sum(i^2),2)
+}
+
+pr1 <- predict(model1)
+pr2 <- predict(model2)
+
+miary <- round(data.frame(
+c(RMSE(dane$Choroba_serca,pr1),MAE(dane$Choroba_serca,pr1)),
+c(RMSE(dane$Choroba_serca,pr2),MAE(dane$Choroba_serca,pr2))),2)
+miary <- cbind(c('RMSE',"MAE"),miary)
+colnames(miary) <- c('miara','model nr 1','model nr 2')
+press <- c('PRESS',PRESS(model1),PRESS(model2))
+miary <- rbind(miary,press)
+miary
+kable(miary)
+```
+
+W naszych modelach trudno jest stwierdzić na podstawie miar, który model jest lepszy, wartości błędów są bardzo zbliżone. W przypadku miary MAE są takie same. Wyznaczymy również kryteria informacyjne.
+
+**AIC - Akaike Information Criterion**
+
+**AICc - Corrected Akaike Information Criterion**
+
+```{r}
+aic <- round(c(AIC(model1),AIC(model2)),2)
+aic <- c('AIC',aic)
+
+k<-2*2/(nrow(dane)-2-1)
+aicc<-round(c(AIC(model1,k=k),
+              AIC(model2,k=k)),2)
+aicc<-c('AICc',aicc)
+```
+
+**BIC - Bayes Information Criterion**
+
+```{r}
+bic <- round(c(BIC(model1),BIC(model2),2))
+bic <- c('BIC',bic)
+```
+
+```{r}
+#DODAC TABELE 
+miary <- rbind(miary,aic,aicc,bic)
+colnames(miary) <- c('miara','model nr 1','model nr 2')
+kable(miary,caption = 'Miary dopasowania zbudowanych modeli')
+
+```
+
+Z tabeli wynika, że nie wszystkie miary przyjmują najmniejszą wartość dla konkretnego modelu. Natomiast można zauważyć, że 3 miary (PRESS, AIC oraz BIC) przyjmują najmniejszą wartość dla modelu nr 2. Zatem można uznać, że jest trochę lepszym modelem ,który opisuje zmienność chorób serca.
+
+### Testy heterogeniczności wariancji
+
+Sprawdzimy czy zmienne objaśniające mogą dokładniej prognozować kwadraty residuów modelu nr 2.
+
+H0: wariancja jest jednorodna
+
+##### Breuscha-Pagana
+
+```{r}
+library(lmtest)
+bptest(model2)
+```
+
+##### White'a
+
+```{r}
+bptest(model2,varformula=~Palenie+Udar+Czas_snu+Skóra
++I(Palenie^2)+I(Udar^2)+I(Czas_snu^2)+I(Skóra^2),data=dane)
+
+
+```
+
+Na podstawie przeprowadzonych testów Breuscha-Pagana oraz White'a odrzucamy hipotezę o jednorodności wariancji reszt w modelu nr 2.
+
+### Testy seryjnej korelacji
+
+H0: brak autokorelacji
+
+##### Test Durbina-Watsona
+
+```{r}
+dwtest(model2)
+```
+
+```{r}
+bgtest(model2,order=4)
+```
+
+Na podstawie testów Durbina-Watsona oraz Breuscha-Godfreya nie ma podstawy do odrzucenia hipotezy o braku autokorelacji reszt w modelu.
+
+### Testy postaci zależności
+
+##### Test RESET Ramseya
+
+```{r}
+resettest(model2, data = dane, type = "regressor")
+```
+
+##### Test Rainbow Uttsa
+
+```{r}
+raintest(model2)
+```
+
+##### Test Harveya-Colliera
+
+```{r}
+harvtest(model2)
+```
+
+Ponieważ p-wartość w każdym z testów jest większa od 0.05, to nie ma podstaw do odrzucenia hipotezy o liniowej zależności zmiennej objaśnianej od zmiennych objaśniających.
+
+## 7. Testowanie hipotez
+
+Zajmiemy się testem nieparametrycznym Chi-kwadrat Pearsona.
+
+1.  H0: Istnieje zależność między zmiennymi `Zdrowie psychiczne` a `Czas snu`.
+
+```{r}
+tab<- table(dane$Zdrowie_psychiczne,dane$Czas_snu)
+chisq.test(tab)
+
+```
+
+Nie ma podstaw do odrzucenia H0.
+
+2.  H0: Cecha `Palenie` posiada rozkład normalny.
+
+```{r}
+shapiro.test(dane$Palenie)
+
+```
+
+```{r}
+srednia<-mean(dane$Palenie)
+odch.st.<-sd(dane$Palenie)
+ks.test(dane$Palenie,"pnorm",srednia,odch.st.)
+```
+
+Na poziomie istotności 0.05 odrzucamy H0 o normalności badanej cechy, czyli nie jest to rozkład normalny.
+
+```{r}
+wilcox.test(dane$Palenie)
+```
+
+3.  H0: Zmienna `Astma` oraz `Choroba nerek` mają taki sam rozkład.
+
+```{r}
+tab2<-table(dane$Astma,dane$Choroba_nerek)
+chisq.test(tab2)
+```
+
+Nie ma podstaw do odrzucenia H0.
+
+## 8. Wnioski
+
+Biorąc pod uwagę zaprezentowane w projekcie dane w kontekście przewidywań chorób serca i zastosowane do nich statystyki możemy zidentyfikować osoby szczególnie narażone na wystąpienie **choroby serca**. Umożliwi to bardziej prezycyjne interwencje z zakresu profilaktyki i eliminacji czynników ryzyka. W przedstawionym projekcie czynniki takie jak `Palenie`, `Udar` , `Cukrzyca` oraz problematyczność ze `skórą` w znacznym stopniu wpływają na rozwój choroby serca. Również dowiedzieliśmy się ,że to mężczyźni częściej chorują niż kobiety.
+
+Ocena jakości życia stanowi istotny aspekt badań, który umożliwia dostosowanie opieki do potrzeb pacjentów. Zasadnym wydaje się kontynuowanie badań i szczegółowa analiza tych danych.
+
+***Żródła***
+
+Dataset \| <https://www.kaggle.com/datasets/kamilpytlak/personal-key-indicators-of-heart-disease>
+
+"Heart disease prediction using machine learning" <https://iopscience.iop.org/article/10.1088/1757-899X/1022/1/012072/pdf>
